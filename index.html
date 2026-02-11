@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聖經冒險王 - 離線版</title>
+    <!-- 載入 React 與 Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Lucide 圖標庫 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+        .animate-pop {
+            animation: pop 0.3s ease-out;
+        }
+        @keyframes pop {
+            0% { transform: scale(0.95); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- Lucide Icon 組件包裝 ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const [svg, setSvg] = useState("");
+            useEffect(() => {
+                if (window.lucide) {
+                    const iconSvg = window.lucide.createIcons();
+                }
+            }, []);
+            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+        };
+
+        // --- 初始資料 ---
+        const LEVEL_LABELS = {
+            '初級': '0~6歲',
+            '中級': '7~12歲',
+            '高級': '13~17歲',
+            '精進級': '18~30歲',
+            '專業級': '30~研究者'
+        };
+
+        const INITIAL_WORLDS = [
+            { 
+                id: 'lvl1', level: '初級', title: "創世的奇妙", icon: "🌱", color: "bg-emerald-500", xp: 100,
+                quizzes: [
+                    { q: "神在第一天創造了什麼？", o: ["光", "空氣", "魚", "人"], a: 0 },
+                    { q: "誰建造了方舟躲避大洪水？", o: ["摩西", "挪亞", "大衛", "亞伯拉罕"], a: 1 },
+                    { q: "耶穌降生在哪個溫暖的小地方？", o: ["皇宮", "馬槽", "聖殿", "旅館"], a: 1 },
+                    { q: "神用了幾天創造世界？", o: ["3天", "7天", "6天", "40天"], a: 2 },
+                    { q: "大衛用什麼打敗了巨人歌利亞？", o: ["機弦和石子", "長矛", "弓箭", "大刀"], a: 0 }
+                ]
+            },
+            { 
+                id: 'lvl2', level: '中級', title: "信心與順服", icon: "⚔️", color: "bg-blue-500", xp: 200,
+                quizzes: [
+                    { q: "神在西乃山賜下幾條誡命？", o: ["5條", "10條", "12條", "7條"], a: 1 },
+                    { q: "摩西帶領以色列人過了哪片海？", o: ["地中海", "紅海", "黑海", "死海"], a: 1 },
+                    { q: "智慧之王是指哪一位？", o: ["大衛", "索羅門", "掃羅", "希西家"], a: 1 }
+                ]
+            },
+            { 
+                id: 'lvl4', level: '精進級', title: "基要真理與生活", icon: "📜", color: "bg-indigo-600", xp: 400, 
+                quizzes: [
+                    { q: "主耶穌在最後的晚宴中，為門徒留下了什麼榜樣？", o: ["分發金錢", "洗腳禮", "建聖殿", "寫家書"], a: 1 },
+                    { q: "聖經中的安息日是指一週中的哪一天？", o: ["星期五", "星期六", "星期日", "星期一"], a: 1 },
+                    { q: "拜神必須用心靈和____拜祂？", o: ["誠實", "禮物", "歌曲", "法律"], a: 0 }
+                ]
+            }
+        ];
+
+        function App() {
+            const [profile, setProfile] = useState(() => {
+                const saved = localStorage.getItem('bible_rpg_profile');
+                return saved ? JSON.parse(saved) : null;
+            });
+            
+            const [worlds, setWorlds] = useState(() => {
+                const saved = localStorage.getItem('bible_rpg_worlds');
+                return saved ? JSON.parse(saved) : INITIAL_WORLDS;
+            });
+
+            const [view, setView] = useState(profile ? 'map' : 'welcome');
+            const [activeWorld, setActiveWorld] = useState(null);
+            const [quizIdx, setQuizIdx] = useState(0);
+            const [selectedOpt, setSelectedOpt] = useState(null);
+            const [score, setScore] = useState(0);
+            const [adminPass, setAdminPass] = useState('');
+            const [inputName, setInputName] = useState('');
+            const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+            useEffect(() => {
+                if (profile) localStorage.setItem('bible_rpg_profile', JSON.stringify(profile));
+                localStorage.setItem('bible_rpg_worlds', JSON.stringify(worlds));
+                if (window.lucide) window.lucide.createIcons();
+            }, [profile, worlds, view]);
+
+            const handleStart = () => {
+                if (!inputName.trim()) return;
+                setProfile({ name: inputName, xp: 0, completed: [], hero: '🛡️' });
+                setView('map');
+            };
+
+            const startQuiz = (world) => {
+                setActiveWorld(world);
+                setQuizIdx(0);
+                setScore(0);
+                setSelectedOpt(null);
+                setView('quiz');
+            };
+
+            const checkAnswer = (idx) => {
+                if (selectedOpt !== null) return;
+                setSelectedOpt(idx);
+                const currentQuiz = activeWorld.quizzes[quizIdx];
+                const isCorrect = idx === currentQuiz.a;
+                if (isCorrect) setScore(s => s + 1);
+
+                setTimeout(() => {
+                    if (quizIdx < activeWorld.quizzes.length - 1) {
+                        setQuizIdx(q => q + 1);
+                        setSelectedOpt(null);
+                    } else {
+                        const finalScore = score + (isCorrect ? 1 : 0);
+                        if (finalScore >= Math.ceil(activeWorld.quizzes.length * 0.6)) {
+                            const isAlreadyDone = profile.completed.includes(activeWorld.id);
+                            setProfile(prev => ({
+                                ...prev,
+                                xp: isAlreadyDone ? prev.xp : prev.xp + activeWorld.xp,
+                                completed: isAlreadyDone ? prev.completed : [...prev.completed, activeWorld.id]
+                            }));
+                        }
+                        setView('result');
+                    }
+                }, 600);
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-50 text-slate-900 p-2 md:p-4">
+                    <div className="max-w-2xl mx-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden min-h-[700px] flex flex-col border border-slate-100">
+                        
+                        {/* Header */}
+                        {profile && view !== 'welcome' && (
+                            <div className="p-5 border-b flex justify-between items-center bg-white sticky top-0 z-20">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl">
+                                        {profile.hero}
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-sm">{profile.name}</p>
+                                        <p className="text-[10px] font-bold text-slate-400">{profile.xp} XP • 本機儲存</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setView('map')} className="p-2 hover:bg-slate-100 rounded-lg"><Icon name="map" /></button>
+                                    <button onClick={() => setView('admin_login')} className="p-2 hover:bg-slate-100 rounded-lg"><Icon name="lock" /></button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Welcome */}
+                        {view === 'welcome' && (
+                            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center animate-pop">
+                                <div className="text-7xl mb-4">⛪</div>
+                                <h1 className="text-3xl font-black text-indigo-600 mb-2">聖經冒險王</h1>
+                                <p className="text-slate-400 text-sm mb-8 font-bold">免登入離線版</p>
+                                <input 
+                                    className="w-full max-w-xs p-4 bg-slate-50 rounded-2xl text-center font-bold border-2 mb-4 outline-none focus:border-indigo-400"
+                                    placeholder="輸入冒險稱號"
+                                    value={inputName} 
+                                    onChange={e => setInputName(e.target.value)}
+                                />
+                                <button onClick={handleStart} className="w-full max-w-xs py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">開始探險</button>
+                            </div>
+                        )}
+
+                        {/* Map */}
+                        {view === 'map' && (
+                            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+                                <h2 className="text-xl font-black flex items-center gap-2">挑戰關卡</h2>
+                                <div className="grid gap-4">
+                                    {worlds.map(w => (
+                                        <button 
+                                            key={w.id} 
+                                            onClick={() => startQuiz(w)}
+                                            className={`p-5 rounded-3xl border-2 text-left flex items-center gap-4 transition-all ${profile.completed.includes(w.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100'}`}
+                                        >
+                                            <div className={`w-14 h-14 rounded-2xl ${w.color} flex items-center justify-center text-2xl text-white`}>{w.icon}</div>
+                                            <div className="flex-1">
+                                                <p className="font-black">{w.title}</p>
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase">{w.level} • {LEVEL_LABELS[w.level]}</p>
+                                            </div>
+                                            {profile.completed.includes(w.id) && <Icon name="check-circle-2" className="text-indigo-500" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Quiz */}
+                        {view === 'quiz' && activeWorld && (
+                            <div className="flex-1 p-6 flex flex-col animate-pop">
+                                <div className="flex justify-between items-center mb-8">
+                                    <button onClick={() => setView('map')}><Icon name="arrow-left" className="text-slate-400" /></button>
+                                    <span className="font-black text-xs text-slate-300">{quizIdx + 1} / {activeWorld.quizzes.length}</span>
+                                    <span className="font-black text-indigo-600">{score} 答對</span>
+                                </div>
+                                <div className="flex-1 flex flex-col justify-center text-center">
+                                    <h3 className="text-xl font-black mb-10">{activeWorld.quizzes[quizIdx].q}</h3>
+                                    <div className="grid gap-3">
+                                        {activeWorld.quizzes[quizIdx].o.map((opt, i) => {
+                                            const isCorrect = i === activeWorld.quizzes[quizIdx].a;
+                                            const isSelected = selectedOpt === i;
+                                            let style = "bg-white border-slate-200";
+                                            if (selectedOpt !== null) {
+                                                if (isCorrect) style = "bg-emerald-50 border-emerald-500 text-emerald-700";
+                                                else if (isSelected) style = "bg-red-50 border-red-500 text-red-700";
+                                                else style = "opacity-40";
+                                            }
+                                            return (
+                                                <button 
+                                                    key={i} 
+                                                    disabled={selectedOpt !== null}
+                                                    onClick={() => checkAnswer(i)}
+                                                    className={`p-4 rounded-2xl border-2 font-bold transition-all ${style}`}
+                                                >
+                                                    {opt}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Result */}
+                        {view === 'result' && (
+                            <div className="flex-1 flex flex-col items-center justify-center p-10 animate-pop">
+                                <div className="text-8xl mb-4">{(score / activeWorld.quizzes.length) >= 0.6 ? '🏆' : '📖'}</div>
+                                <h2 className="text-2xl font-black mb-8">挑戰結束！得分：{score}</h2>
+                                <button onClick={() => setView('map')} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black">返回地圖</button>
+                            </div>
+                        )}
+
+                        {/* Admin */}
+                        {view === 'admin_login' && (
+                            <div className="flex-1 flex flex-col items-center justify-center p-10">
+                                <h3 className="font-black mb-4 text-slate-400">管理後台 (密碼: 1234)</h3>
+                                <input 
+                                    type="password"
+                                    className="p-4 bg-slate-100 rounded-xl text-center font-black outline-none mb-4"
+                                    value={adminPass}
+                                    onChange={e => setAdminPass(e.target.value)}
+                                />
+                                <button onClick={() => adminPass === '1234' ? setView('admin_panel') : alert('密碼錯誤')} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black">進入</button>
+                                <button onClick={() => setView('map')} className="mt-4 text-xs font-bold text-slate-300">取消</button>
+                            </div>
+                        )}
+
+                        {view === 'admin_panel' && (
+                            <div className="flex-1 p-6 space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="font-black">後台管理</h2>
+                                    <button onClick={() => setView('map')} className="text-xs font-black p-2 border rounded-lg">退出</button>
+                                </div>
+                                <button onClick={() => { localStorage.clear(); location.reload(); }} className="w-full py-3 bg-red-500 text-white rounded-xl font-black text-sm">清除所有本地進度</button>
+                                <p className="text-[10px] text-slate-400 text-center font-bold">離線版建議直接修改 HTML 源碼來新增題目</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
